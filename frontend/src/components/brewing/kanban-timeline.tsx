@@ -15,6 +15,11 @@ export interface PhaseConfig {
   key: BrewPhase
   label: string
   icon: LucideIcon
+  color: string
+  bgColor: string
+  defaultMinutes: number
+  defaultTempC?: number
+  safetyNote?: string
 }
 
 export const BREW_PHASES: PhaseConfig[] = [

@@ -15,6 +15,8 @@ interface CommandItem {
   label: string
   category: string
   icon: LucideIcon
+  action: () => void
+  keywords?: string
 }
 
 interface CommandPaletteProps {

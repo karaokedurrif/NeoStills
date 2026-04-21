@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 interface NavItem {
   to: string
   icon: LucideIcon
+  labelKey: string
 }
 
 interface NavGroup {
