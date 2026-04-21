@@ -4,9 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, FlaskConical, PlayCircle, Thermometer, Droplet,
-  ChevronRight, Clock, Zap, ListChecks,
+  ChevronRight, Clock, Zap, ListChecks, Box,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { OrbitControls, Html } from '@react-three/drei'
+import * as THREE from 'three'
 
 import { useUIStore } from '@/stores/ui-store'
 import { useBrewStore } from '@/stores/brew-store'
@@ -53,6 +56,630 @@ function buildHopSchedule(recipe?: Recipe | null): HopAddition[] {
       notified: false,
     }))
     .sort((a, b) => b.time_min - a.time_min)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   3D STILL MODELS — configurable by type
+   ══════════════════════════════════════════════════════════════════ */
+type StillType = 'pot_still' | 'reflux' | 'hybrid' | 'alquitara' | 'column'
+
+const STILL_LABELS: Record<StillType, string> = {
+  pot_still:  'Pot Still (Cobre)',
+  reflux:     'Reflux / Columna',
+  hybrid:     'Hybrid Still',
+  alquitara:  'Alquitara',
+  column:     'Column Still',
+}
+
+/* shared copper material args */
+const copperProps = { color: '#B87333', metalness: 0.82, roughness: 0.28, envMapIntensity: 1.0 }
+const copperDarkProps = { color: '#9B6220', metalness: 0.8, roughness: 0.35, envMapIntensity: 0.8 }
+const copperBrightProps = { color: '#D4A060', metalness: 0.85, roughness: 0.22, envMapIntensity: 1.1 }
+
+/* — POT STILL (classic onion-shaped copper still) ——————————— */
+function PotStillModel({ phase }: { phase?: string }) {
+  // LatheGeometry for the onion/pot body
+  const bodyPts = useMemo(() => [
+    new THREE.Vector2(0.06, 0),
+    new THREE.Vector2(0.48, 0.08),
+    new THREE.Vector2(0.72, 0.5),
+    new THREE.Vector2(0.92, 1.1),
+    new THREE.Vector2(0.94, 1.65),
+    new THREE.Vector2(0.90, 2.1),
+    new THREE.Vector2(0.72, 2.55),
+    new THREE.Vector2(0.52, 2.85),
+    new THREE.Vector2(0.38, 3.05),
+    new THREE.Vector2(0.30, 3.2),
+    new THREE.Vector2(0.25, 3.35),
+  ], [])
+
+  const helmetPts = useMemo(() => [
+    new THREE.Vector2(0.25, 0),
+    new THREE.Vector2(0.28, 0.12),
+    new THREE.Vector2(0.24, 0.28),
+    new THREE.Vector2(0.18, 0.42),
+    new THREE.Vector2(0.12, 0.52),
+    new THREE.Vector2(0.09, 0.6),
+  ], [])
+
+  const isHeating = phase === 'stripping_run' || phase === 'spirit_run'
+
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Main pot body */}
+      <mesh castShadow>
+        <latheGeometry args={[bodyPts, 48]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Bottom plate / base ring */}
+      <mesh position={[0, 0.04, 0]}>
+        <cylinderGeometry args={[0.5, 0.5, 0.08, 32]} />
+        <meshStandardMaterial {...copperDarkProps} />
+      </mesh>
+
+      {/* Rivet band rings */}
+      {[0.5, 1.0, 1.6, 2.2].map((y, i) => (
+        <mesh key={i} position={[0, y, 0]}>
+          <torusGeometry args={[0.93 - i * 0.04, 0.018, 6, 48]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Helmet (onion top) */}
+      <group position={[0, 3.35, 0]}>
+        <mesh castShadow>
+          <latheGeometry args={[helmetPts, 32]} />
+          <meshStandardMaterial {...copperBrightProps} />
+        </mesh>
+      </group>
+
+      {/* Swan neck — vertical tube rising from helmet */}
+      <mesh position={[0, 3.95, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.07, 1.2, 14]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Lyne arm — angled tube going right + down */}
+      <group position={[0, 4.42, 0]} rotation={[0, 0, -Math.PI / 4.5]}>
+        <mesh position={[0.7, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.065, 0.065, 1.6, 12]} />
+          <meshStandardMaterial {...copperProps} />
+        </mesh>
+      </group>
+
+      {/* Worm condenser coil (simplified as stack of tori) */}
+      <group position={[1.95, 3.5, 0]}>
+        {[0, 0.22, 0.44, 0.66, 0.88].map((y, i) => (
+          <mesh key={i} position={[0, -y, 0]}>
+            <torusGeometry args={[0.35 - i * 0.02, 0.055, 8, 24]} />
+            <meshStandardMaterial {...copperProps} />
+          </mesh>
+        ))}
+        {/* Condenser shell */}
+        <mesh position={[0, -0.44, 0]}>
+          <cylinderGeometry args={[0.52, 0.52, 1.1, 16]} />
+          <meshStandardMaterial color="#6888AA" metalness={0.55} roughness={0.35} transparent opacity={0.35} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+
+      {/* Spirit safe / collection jar */}
+      <mesh position={[2.5, 2.4, 0]} castShadow>
+        <cylinderGeometry args={[0.22, 0.22, 0.5, 14]} />
+        <meshStandardMaterial color="#AACCDD" metalness={0.3} roughness={0.1} transparent opacity={0.55} />
+      </mesh>
+
+      {/* Flame glow under pot when heating */}
+      {isHeating && (
+        <pointLight position={[0, 0.2, 0]} intensity={2.5} color="#FF6A00" distance={3} decay={2.5} />
+      )}
+
+      {/* Heat source ring */}
+      <mesh position={[0, 0.06, 0]}>
+        <torusGeometry args={[0.42, 0.055, 8, 32]} />
+        <meshStandardMaterial
+          color={isHeating ? '#FF6A00' : '#555'}
+          emissive={isHeating ? '#FF4400' : '#000'}
+          emissiveIntensity={isHeating ? 1.8 : 0}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+/* — REFLUX / COLUMN STILL ——————————————————————————————— */
+function RefluxStillModel({ phase }: { phase?: string }) {
+  const isHeating = phase === 'stripping_run' || phase === 'spirit_run'
+  const PLATES = 8
+
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Boiler (smaller pot at base) */}
+      <mesh castShadow position={[0, 0.6, 0]}>
+        <cylinderGeometry args={[0.75, 0.75, 1.2, 32]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+      {/* Boiler dome top */}
+      <mesh position={[0, 1.2, 0]}>
+        <sphereGeometry args={[0.75, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial {...copperBrightProps} />
+      </mesh>
+      {/* Boiler base */}
+      <mesh position={[0, 0.06, 0]}>
+        <cylinderGeometry args={[0.78, 0.78, 0.12, 32]} />
+        <meshStandardMaterial {...copperDarkProps} />
+      </mesh>
+
+      {/* Column body */}
+      <mesh position={[0, 3.4, 0]} castShadow>
+        <cylinderGeometry args={[0.32, 0.32, 4.4, 20]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Plate rings — visible perforated plates */}
+      {Array.from({ length: PLATES }, (_, i) => (
+        <group key={i} position={[0, 1.7 + i * (4.4 / PLATES), 0]}>
+          <mesh>
+            <cylinderGeometry args={[0.33, 0.33, 0.055, 20]} />
+            <meshStandardMaterial {...copperDarkProps} />
+          </mesh>
+          <mesh>
+            <torusGeometry args={[0.33, 0.022, 6, 20]} />
+            <meshStandardMaterial color="#7A4822" metalness={0.9} roughness={0.2} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Dephlegmator (wide cylinder near top) */}
+      <mesh position={[0, 6.0, 0]} castShadow>
+        <cylinderGeometry args={[0.48, 0.42, 0.9, 20]} />
+        <meshStandardMaterial color="#6888AA" metalness={0.6} roughness={0.25} transparent opacity={0.6} />
+      </mesh>
+      {/* Dephlegmator coolant bands */}
+      {[5.7, 5.9, 6.1, 6.3].map((y, i) => (
+        <mesh key={i} position={[0, y, 0]}>
+          <torusGeometry args={[0.46, 0.025, 6, 20]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Top condenser (small cylinder) */}
+      <mesh position={[0, 6.65, 0]} castShadow>
+        <cylinderGeometry args={[0.25, 0.25, 0.5, 14]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Output lyne arm */}
+      <group position={[0.28, 6.65, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh position={[0.5, 0, 0]}>
+          <cylinderGeometry args={[0.055, 0.055, 1.0, 10]} />
+          <meshStandardMaterial {...copperProps} />
+        </mesh>
+      </group>
+
+      {/* Heat ring */}
+      <mesh position={[0, 0.12, 0]}>
+        <torusGeometry args={[0.6, 0.06, 8, 32]} />
+        <meshStandardMaterial
+          color={isHeating ? '#FF6A00' : '#555'}
+          emissive={isHeating ? '#FF4400' : '#000'}
+          emissiveIntensity={isHeating ? 1.8 : 0}
+          toneMapped={false}
+        />
+      </mesh>
+      {isHeating && (
+        <pointLight position={[0, 0.3, 0]} intensity={2.2} color="#FF6A00" distance={3} decay={2.5} />
+      )}
+    </group>
+  )
+}
+
+/* — HYBRID STILL ————————————————————————————————————————— */
+function HybridStillModel({ phase }: { phase?: string }) {
+  const isHeating = phase === 'stripping_run' || phase === 'spirit_run'
+
+  const bodyPts = useMemo(() => [
+    new THREE.Vector2(0.06, 0),
+    new THREE.Vector2(0.45, 0.06),
+    new THREE.Vector2(0.68, 0.45),
+    new THREE.Vector2(0.85, 1.05),
+    new THREE.Vector2(0.82, 1.6),
+    new THREE.Vector2(0.62, 2.0),
+    new THREE.Vector2(0.42, 2.25),
+    new THREE.Vector2(0.32, 2.42),
+  ], [])
+
+  return (
+    <group>
+      {/* Pot body */}
+      <mesh castShadow>
+        <latheGeometry args={[bodyPts, 44]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Pot collar */}
+      <mesh position={[0, 2.42, 0]}>
+        <cylinderGeometry args={[0.32, 0.32, 0.15, 20]} />
+        <meshStandardMaterial {...copperDarkProps} />
+      </mesh>
+
+      {/* Detachable column (union joint visible) */}
+      <mesh position={[0, 2.6, 0]}>
+        <cylinderGeometry args={[0.36, 0.36, 0.12, 20]} />
+        <meshStandardMaterial color="#8B6820" metalness={0.88} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 4.1, 0]} castShadow>
+        <cylinderGeometry args={[0.29, 0.29, 2.8, 18]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Column plates (fewer than pure reflux) */}
+      {[0, 0.55, 1.1, 1.65, 2.2].map((y, i) => (
+        <mesh key={i} position={[0, 2.8 + y, 0]}>
+          <cylinderGeometry args={[0.30, 0.30, 0.05, 18]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Swan neck top */}
+      <mesh position={[0, 5.2, 0]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.7, 12]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Lyne arm */}
+      <group position={[0, 5.55, 0]} rotation={[0, 0, -Math.PI / 5]}>
+        <mesh position={[0.65, 0, 0]}>
+          <cylinderGeometry args={[0.065, 0.065, 1.3, 10]} />
+          <meshStandardMaterial {...copperProps} />
+        </mesh>
+      </group>
+
+      {/* Small condenser */}
+      <group position={[1.7, 4.8, 0]}>
+        {[0, 0.2, 0.4].map((y, i) => (
+          <mesh key={i} position={[0, -y, 0]}>
+            <torusGeometry args={[0.3 - i * 0.02, 0.05, 8, 20]} />
+            <meshStandardMaterial {...copperProps} />
+          </mesh>
+        ))}
+        <mesh position={[0, -0.2, 0]}>
+          <cylinderGeometry args={[0.42, 0.42, 0.5, 16]} />
+          <meshStandardMaterial color="#6888AA" metalness={0.5} roughness={0.35} transparent opacity={0.3} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+
+      {/* Rivet bands */}
+      {[0.5, 1.1, 1.7].map((y, i) => (
+        <mesh key={i} position={[0, y, 0]}>
+          <torusGeometry args={[0.85 - i * 0.03, 0.016, 6, 44]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Heat */}
+      <mesh position={[0, 0.1, 0]}>
+        <torusGeometry args={[0.38, 0.055, 8, 32]} />
+        <meshStandardMaterial
+          color={isHeating ? '#FF6A00' : '#555'}
+          emissive={isHeating ? '#FF4400' : '#000'}
+          emissiveIntensity={isHeating ? 1.8 : 0}
+          toneMapped={false}
+        />
+      </mesh>
+      {isHeating && (
+        <pointLight position={[0, 0.3, 0]} intensity={2.2} color="#FF6A00" distance={3} decay={2.5} />
+      )}
+    </group>
+  )
+}
+
+/* — ALQUITARA (Moorish-style) ——————————————————————————— */
+function AlquitaraModel({ phase }: { phase?: string }) {
+  const isHeating = phase === 'stripping_run' || phase === 'spirit_run'
+
+  const bodyPts = useMemo(() => [
+    new THREE.Vector2(0.06, 0),
+    new THREE.Vector2(0.6, 0.1),
+    new THREE.Vector2(1.05, 0.7),   // very wide belly
+    new THREE.Vector2(1.1, 1.4),
+    new THREE.Vector2(1.0, 2.1),
+    new THREE.Vector2(0.78, 2.6),
+    new THREE.Vector2(0.5, 2.9),
+    new THREE.Vector2(0.3, 3.1),
+    new THREE.Vector2(0.22, 3.3),
+  ], [])
+
+  return (
+    <group>
+      {/* Wide belly pot */}
+      <mesh castShadow>
+        <latheGeometry args={[bodyPts, 48]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Decorative horizontal bands */}
+      {[0.4, 0.9, 1.5, 2.1, 2.6].map((y, i) => (
+        <mesh key={i} position={[0, y, 0]}>
+          <torusGeometry args={[1.05 - Math.abs(i - 2.5) * 0.05, 0.022, 6, 48]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Alembic head (cooling dome + water channel) */}
+      <mesh position={[0, 3.3, 0]} castShadow>
+        <sphereGeometry args={[0.5, 32, 18]} />
+        <meshStandardMaterial {...copperBrightProps} />
+      </mesh>
+      {/* Water channel ring around head */}
+      <mesh position={[0, 3.3, 0]}>
+        <torusGeometry args={[0.52, 0.1, 8, 32]} />
+        <meshStandardMaterial color="#6888AA" metalness={0.5} roughness={0.3} transparent opacity={0.5} />
+      </mesh>
+
+      {/* Spout (beak) */}
+      <group position={[0, 3.3, 0]} rotation={[0, 0, -Math.PI / 6]}>
+        <mesh position={[0.7, 0, 0]}>
+          <cylinderGeometry args={[0.07, 0.1, 1.4, 10]} />
+          <meshStandardMaterial {...copperProps} />
+        </mesh>
+      </group>
+
+      {/* Collection vessel */}
+      <mesh position={[1.45, 0.5, 0]} castShadow>
+        <cylinderGeometry args={[0.3, 0.3, 0.6, 16]} />
+        <meshStandardMaterial color="#AACCDD" metalness={0.3} roughness={0.1} transparent opacity={0.6} />
+      </mesh>
+
+      {/* Heat */}
+      <mesh position={[0, 0.1, 0]}>
+        <torusGeometry args={[0.5, 0.055, 8, 32]} />
+        <meshStandardMaterial
+          color={isHeating ? '#FF6A00' : '#555'}
+          emissive={isHeating ? '#FF4400' : '#000'}
+          emissiveIntensity={isHeating ? 1.8 : 0}
+          toneMapped={false}
+        />
+      </mesh>
+      {isHeating && (
+        <pointLight position={[0, 0.3, 0]} intensity={2.0} color="#FF6A00" distance={3} decay={2.5} />
+      )}
+    </group>
+  )
+}
+
+/* — CONTINUOUS COLUMN STILL ——————————————————————————— */
+function ColumnStillModel({ phase }: { phase?: string }) {
+  const isHeating = phase === 'stripping_run' || phase === 'spirit_run'
+  const PLATES = 14
+
+  return (
+    <group>
+      {/* Analyzer column */}
+      <mesh position={[-0.6, 3.8, 0]} castShadow>
+        <cylinderGeometry args={[0.42, 0.42, 7.6, 20]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Rectifier column */}
+      <mesh position={[0.6, 4.2, 0]} castShadow>
+        <cylinderGeometry args={[0.36, 0.36, 8.4, 20]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Plates - analyzer */}
+      {Array.from({ length: PLATES / 2 }, (_, i) => (
+        <mesh key={i} position={[-0.6, 0.5 + i * (7.6 / (PLATES / 2)), 0]}>
+          <torusGeometry args={[0.43, 0.022, 6, 20]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Plates - rectifier */}
+      {Array.from({ length: PLATES / 2 }, (_, i) => (
+        <mesh key={i} position={[0.6, 0.5 + i * (8.4 / (PLATES / 2)), 0]}>
+          <torusGeometry args={[0.37, 0.022, 6, 20]} />
+          <meshStandardMaterial {...copperDarkProps} />
+        </mesh>
+      ))}
+
+      {/* Cross-pipe between columns */}
+      <mesh position={[0, 4.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.06, 0.06, 1.2, 10]} />
+        <meshStandardMaterial {...copperProps} />
+      </mesh>
+
+      {/* Condenser at top of rectifier */}
+      <mesh position={[0.6, 8.55, 0]}>
+        <cylinderGeometry args={[0.5, 0.5, 0.6, 16]} />
+        <meshStandardMaterial color="#6888AA" metalness={0.6} roughness={0.25} transparent opacity={0.5} />
+      </mesh>
+
+      {/* Steam inlet at bottom of analyzer */}
+      <mesh position={[-0.6, 0.15, 0]}>
+        <cylinderGeometry args={[0.44, 0.44, 0.3, 20]} />
+        <meshStandardMaterial {...copperDarkProps} />
+      </mesh>
+
+      {/* Heat */}
+      <mesh position={[-0.6, 0.12, 0]}>
+        <torusGeometry args={[0.35, 0.055, 8, 32]} />
+        <meshStandardMaterial
+          color={isHeating ? '#FF6A00' : '#555'}
+          emissive={isHeating ? '#FF4400' : '#000'}
+          emissiveIntensity={isHeating ? 1.8 : 0}
+          toneMapped={false}
+        />
+      </mesh>
+      {isHeating && (
+        <pointLight position={[-0.6, 0.3, 0]} intensity={2.0} color="#FF6A00" distance={3} decay={2.5} />
+      )}
+    </group>
+  )
+}
+
+/* — Stone floor + distillery walls ——————————————————————— */
+function DistilleryFloor() {
+  return (
+    <group>
+      {/* Stone floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[18, 14]} />
+        <meshStandardMaterial color="#2C2822" roughness={0.92} metalness={0.04} />
+      </mesh>
+      {/* Stone tile grout lines */}
+      {Array.from({ length: 7 }, (_, i) => (
+        <mesh key={`x${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[-7.5 + i * 2.5, 0.003, 0]}>
+          <planeGeometry args={[0.04, 14]} />
+          <meshBasicMaterial color="#1A1816" />
+        </mesh>
+      ))}
+      {Array.from({ length: 6 }, (_, i) => (
+        <mesh key={`z${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, -5 + i * 2]}>
+          <planeGeometry args={[18, 0.04]} />
+          <meshBasicMaterial color="#1A1816" />
+        </mesh>
+      ))}
+      {/* Back brick wall */}
+      <mesh position={[0, 5, -7]} receiveShadow>
+        <boxGeometry args={[18, 10, 0.28]} />
+        <meshStandardMaterial color="#3A3028" roughness={0.95} metalness={0.03} />
+      </mesh>
+      {/* Side walls */}
+      <mesh position={[-9, 5, 0]} receiveShadow>
+        <boxGeometry args={[0.28, 10, 14]} />
+        <meshStandardMaterial color="#3A3028" roughness={0.95} metalness={0.03} />
+      </mesh>
+      <mesh position={[9, 5, 0]} receiveShadow>
+        <boxGeometry args={[0.28, 10, 14]} />
+        <meshStandardMaterial color="#3A3028" roughness={0.95} metalness={0.03} />
+      </mesh>
+    </group>
+  )
+}
+
+/* — Torch wall light ——————————————————————————————————— */
+function WallTorch({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh>
+        <cylinderGeometry args={[0.04, 0.04, 0.3, 8]} />
+        <meshStandardMaterial color="#5A3010" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 0.2, 0]}>
+        <sphereGeometry args={[0.1, 8, 8]} />
+        <meshStandardMaterial color="#FF8800" emissive="#FF6600" emissiveIntensity={2} toneMapped={false} />
+      </mesh>
+      <pointLight position={[0, 0.3, 0]} intensity={1.8} color="#FF7722" distance={5} decay={2} />
+    </group>
+  )
+}
+
+/* — Phase info HTML overlay ——————————————————————————————— */
+function PhaseOverlay({ phase, stillType }: { phase?: string; stillType: StillType }) {
+  const phaseLabels: Record<string, string> = {
+    stripping_run: 'Stripping Run activo',
+    spirit_run:    'Spirit Run activo',
+    mashing:       'Mashing en curso',
+    fermenting:    'Fermentación activa',
+  }
+  const label = phase ? (phaseLabels[phase] ?? '') : ''
+
+  return (
+    <Html position={[0, 8.5, -6.5]} center distanceFactor={16} transform>
+      <div className="bg-[#0F0F0F]/85 border border-[#B87333]/40 rounded px-4 py-2 text-[11px] whitespace-nowrap pointer-events-none">
+        <span className="text-[#B87333] font-semibold">{STILL_LABELS[stillType]}</span>
+        {label && (
+          <>
+            <span className="text-[#555] mx-2">|</span>
+            <span className="text-[#4ADE80] font-mono">{label}</span>
+          </>
+        )}
+      </div>
+    </Html>
+  )
+}
+
+/* — Full 3D still scene ————————————————————————————————— */
+function Still3DScene({ stillType, phase }: { stillType: StillType; phase?: string }) {
+  const scale = stillType === 'column' ? 0.72 : 0.85
+  const yOffset = stillType === 'column' ? 0 : 0.2
+
+  return (
+    <>
+      <fog attach="fog" args={['#1A1410', 14, 38]} />
+      <color attach="background" args={['#1A1410']} />
+
+      <hemisphereLight args={['#443322', '#1A1008', 0.45]} />
+      <ambientLight intensity={0.25} color="#FFDDAA" />
+      <pointLight position={[3, 7, 3]} intensity={1.2} color="#FFE8CC" distance={16} castShadow />
+      <pointLight position={[-4, 5, -2]} intensity={0.6} color="#FFCC88" distance={12} />
+
+      <DistilleryFloor />
+      <WallTorch position={[-8.6, 3.5, -3]} />
+      <WallTorch position={[8.6, 3.5, -3]} />
+      <WallTorch position={[-8.6, 3.5, 3]} />
+
+      {/* Still model centered */}
+      <group position={[0, yOffset, -1]} scale={[scale, scale, scale]}>
+        {stillType === 'pot_still'  && <PotStillModel  phase={phase} />}
+        {stillType === 'reflux'     && <RefluxStillModel phase={phase} />}
+        {stillType === 'hybrid'     && <HybridStillModel phase={phase} />}
+        {stillType === 'alquitara'  && <AlquitaraModel  phase={phase} />}
+        {stillType === 'column'     && <ColumnStillModel phase={phase} />}
+      </group>
+
+      <PhaseOverlay phase={phase} stillType={stillType} />
+
+      <OrbitControls
+        target={[0, 3, 0]}
+        minDistance={4}
+        maxDistance={22}
+        maxPolarAngle={Math.PI / 2.05}
+      />
+    </>
+  )
+}
+
+/* — Card with Canvas + type selector ——————————————————— */
+function Still3DPanel({ currentPhase }: { currentPhase?: string }) {
+  const [stillType, setStillType] = useState<StillType>('pot_still')
+
+  return (
+    <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
+      {/* Panel header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+        <div className="flex items-center gap-2">
+          <Box size={14} className="text-accent-copper" />
+          <span className="text-sm font-semibold text-text-primary">Mi Alambique — 3D</span>
+        </div>
+        <select
+          value={stillType}
+          onChange={(e) => setStillType(e.target.value as StillType)}
+          className="text-xs bg-bg-elevated border border-white/10 text-text-secondary rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent-copper/40 cursor-pointer"
+        >
+          {(Object.entries(STILL_LABELS) as [StillType, string][]).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* 3D canvas */}
+      <div style={{ height: 380, position: 'relative' }}>
+        <Canvas
+          shadows
+          camera={{ position: [4, 5, 9], fov: 50 }}
+          gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
+        >
+          <Still3DScene stillType={stillType} phase={currentPhase} />
+        </Canvas>
+        <div className="absolute bottom-3 left-3 text-[10px] text-[#555] pointer-events-none select-none">
+          Arrastra · Scroll = zoom
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /* ── Start New Brew Hero ───────────────────────────────────────── */
@@ -371,6 +998,9 @@ export default function BrewingPage() {
           </Button>
         )}
       </div>
+
+      {/* 3D Still — always visible */}
+      <Still3DPanel currentPhase={activeSession?.phase} />
 
       {/* Active Brew or Start Hero */}
       {activeSession ? (

@@ -1,11 +1,14 @@
 // frontend/src/pages/fermentation.tsx — NeoStills v3 Fermentation Digital Twin
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FlaskConical, Thermometer, Droplets, Plus, Activity,
   AlertTriangle, TrendingDown, Calendar, Wifi, WifiOff,
-  Battery, Clock, ChevronRight,
+  Battery, Clock, ChevronRight, Grid3X3, Box,
 } from 'lucide-react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { OrbitControls, Html } from '@react-three/drei'
+import * as THREE from 'three'
 
 import { useUIStore } from '@/stores/ui-store'
 import { useBrewSessions, useFermentationData } from '@/hooks/use-brewing'
@@ -26,6 +29,437 @@ import { AddFermentationModal } from '@/components/fermentation/add-fermentation
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { BrewSession, ISpindelReading } from '@/lib/types'
+
+/* ══════════════════════════════════════════════════════════════════
+   3D FERMENTATION ROOM — industrial stainless steel tank hall
+   ══════════════════════════════════════════════════════════════════ */
+interface FermentTank3DData {
+  id: string
+  name: string
+  capacity: number
+  type: 'conical' | 'bucket' | 'carboy' | 'unitank' | 'pressure' | 'unknown'
+  status: 'active' | 'idle' | 'attention' | 'healthy' | 'alert'
+  fill: number
+  temperature: number | null
+  gravity: number | null
+  abv: number | null
+  beerName: string | null
+}
+
+const FERM_STATUS_COLORS: Record<string, string> = {
+  active:    '#4ADE80',
+  idle:      '#555',
+  attention: '#FBBF24',
+  healthy:   '#60A5FA',
+  alert:     '#EF4444',
+}
+
+/* — single vertical stainless-steel tank ——————————— */
+function FermentTank3D({
+  data,
+  position,
+  onClick,
+  selected,
+}: {
+  data: FermentTank3DData
+  position: [number, number, number]
+  onClick: () => void
+  selected: boolean
+}) {
+  const [hovered, setHovered] = useState(false)
+  const liquidRef = useRef<THREE.Mesh>(null)
+
+  // Scale by capacity — root-law so large tanks aren't huge
+  const scale   = Math.pow(data.capacity / 30, 0.33)
+  const radius  = Math.min(1.3, Math.max(0.42, 0.52 * scale))
+  const height  = Math.min(5.5, Math.max(2.0, 2.6 * scale))
+  const conical = data.type === 'conical' || data.type === 'pressure'
+
+  const fillPct = data.fill
+  const statusColor = FERM_STATUS_COLORS[data.status] ?? '#555'
+
+  useFrame((state) => {
+    if (liquidRef.current && data.status === 'active') {
+      const mat = liquidRef.current.material as THREE.MeshStandardMaterial
+      mat.emissiveIntensity = 0.12 + Math.sin(state.clock.elapsedTime * 2.8) * 0.07
+    }
+  })
+
+  return (
+    <group
+      position={[position[0], position[1] + height / 2, position[2]]}
+      onClick={onClick}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
+      {/* Body */}
+      <mesh castShadow>
+        <cylinderGeometry args={[radius, radius, height, 32]} />
+        <meshStandardMaterial color="#C4C4C4" metalness={0.85} roughness={0.18} envMapIntensity={0.9} />
+      </mesh>
+
+      {/* Top dome */}
+      <mesh position={[0, height / 2, 0]} castShadow>
+        <sphereGeometry args={[radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#D2D2D2" metalness={0.9} roughness={0.15} />
+      </mesh>
+
+      {/* Conical bottom */}
+      {conical ? (
+        <mesh position={[0, -height / 2 - 0.28, 0]} castShadow>
+          <coneGeometry args={[radius, 0.56, 32]} />
+          <meshStandardMaterial color="#B8B8B8" metalness={0.85} roughness={0.2} />
+        </mesh>
+      ) : (
+        <mesh position={[0, -height / 2 - 0.04, 0]}>
+          <cylinderGeometry args={[radius * 0.92, radius * 0.92, 0.08, 32]} />
+          <meshStandardMaterial color="#B0B0B0" metalness={0.8} roughness={0.25} />
+        </mesh>
+      )}
+
+      {/* 3 support legs */}
+      {[0, 120, 240].map((deg, i) => {
+        const r = (deg * Math.PI) / 180
+        const legY = conical ? -height / 2 - 0.56 - 0.25 : -height / 2 - 0.25
+        return (
+          <mesh key={i} position={[Math.cos(r) * radius * 0.72, legY, Math.sin(r) * radius * 0.72]} castShadow>
+            <cylinderGeometry args={[0.033, 0.033, 0.5, 6]} />
+            <meshStandardMaterial color="#888" metalness={0.78} roughness={0.3} />
+          </mesh>
+        )
+      })}
+
+      {/* Weld seams */}
+      {[-0.28, 0.28].map((f, i) => (
+        <mesh key={i} position={[0, f * height, 0]}>
+          <torusGeometry args={[radius + 0.004, 0.009, 6, 32]} />
+          <meshStandardMaterial color="#9A9A9A" metalness={0.9} roughness={0.15} />
+        </mesh>
+      ))}
+
+      {/* Manhole */}
+      <mesh position={[0, height / 2 + 0.21, 0]}>
+        <cylinderGeometry args={[0.19, 0.19, 0.07, 16]} />
+        <meshStandardMaterial color="#AAA" metalness={0.95} roughness={0.1} />
+      </mesh>
+      {/* Airlock tube */}
+      <mesh position={[0.08, height / 2 + 0.26, 0]}>
+        <cylinderGeometry args={[0.022, 0.022, 0.14, 8]} />
+        <meshStandardMaterial color="#C8C8C8" metalness={0.8} roughness={0.25} />
+      </mesh>
+      {/* Airlock bubble */}
+      <mesh position={[0.08, height / 2 + 0.36, 0]}>
+        <sphereGeometry args={[0.04, 10, 10]} />
+        <meshStandardMaterial color="#AACCDD" metalness={0.2} roughness={0.1} transparent opacity={0.7} />
+      </mesh>
+
+      {/* Valve */}
+      <group position={[radius + 0.07, -height / 4, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh>
+          <cylinderGeometry args={[0.04, 0.04, 0.17, 8]} />
+          <meshStandardMaterial color="#A0A0A0" metalness={0.9} roughness={0.15} />
+        </mesh>
+        <mesh position={[0, 0.1, 0]}>
+          <cylinderGeometry args={[0.065, 0.065, 0.024, 12]} />
+          <meshStandardMaterial color="#B83333" metalness={0.6} roughness={0.4} />
+        </mesh>
+      </group>
+
+      {/* Sight glass */}
+      <mesh position={[radius + 0.01, 0.12, 0]}>
+        <cylinderGeometry args={[0.07, 0.07, 0.22, 16]} />
+        <meshStandardMaterial color="#558899" metalness={0.2} roughness={0.1} transparent opacity={0.55} />
+      </mesh>
+
+      {/* Liquid fill */}
+      {fillPct > 0 && (
+        <mesh ref={liquidRef} position={[0, -height / 2 + (height * fillPct) / 2, 0]}>
+          <cylinderGeometry args={[radius * 0.94, radius * 0.94, height * fillPct, 32]} />
+          <meshStandardMaterial
+            color={statusColor}
+            transparent opacity={0.45}
+            emissive={statusColor}
+            emissiveIntensity={0.12}
+          />
+        </mesh>
+      )}
+
+      {/* Temperature LED */}
+      <mesh position={[radius + 0.1, height * 0.28, 0]}>
+        <sphereGeometry args={[0.055, 8, 8]} />
+        <meshStandardMaterial
+          color={data.temperature != null && data.temperature > 26 ? '#EF4444' : data.temperature != null && data.temperature > 22 ? '#FBBF24' : statusColor}
+          emissive={data.temperature != null && data.temperature > 26 ? '#EF4444' : data.temperature != null && data.temperature > 22 ? '#FBBF24' : statusColor}
+          emissiveIntensity={1.4}
+          toneMapped={false}
+        />
+      </mesh>
+
+      {/* Selection ring */}
+      {(selected || hovered) && (
+        <mesh position={[0, -height / 2 + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[radius + 0.14, radius + 0.27, 32]} />
+          <meshBasicMaterial color="#B87333" transparent opacity={0.8} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+
+      {/* Persistent IoT label */}
+      <Html
+        position={[0, -height / 2 - (conical ? 0.88 : 0.38), radius + 0.18]}
+        center distanceFactor={8} transform occlude={false}
+      >
+        <div className="bg-[#0F0F0F]/90 border border-[#333] rounded px-2 py-0.5 text-[10px] whitespace-nowrap pointer-events-none select-none">
+          <span className="text-[#B87333] font-mono font-bold">{data.name}</span>
+          <span className="text-[#555] mx-1">·</span>
+          <span className="text-[#ccc] font-mono">{data.capacity}L</span>
+          {data.temperature != null && (
+            <>
+              <span className="text-[#555] mx-1">·</span>
+              <span className="text-[#4ADE80] font-mono">{data.temperature.toFixed(1)}°C</span>
+            </>
+          )}
+        </div>
+      </Html>
+
+      {/* Hover HUD */}
+      {hovered && (
+        <Html position={[0, height / 2 + 1.0, 0]} center>
+          <div className="bg-[#1A1816]/95 border border-[#B87333] rounded-lg px-4 py-3 text-xs whitespace-nowrap backdrop-blur-sm min-w-[170px] shadow-lg">
+            <p className="text-[#B87333] font-bold text-sm mb-2">{data.name}</p>
+            <div className="space-y-1 text-[#E5E5E5]">
+              <p className="flex justify-between gap-4">
+                <span className="text-[#888]">Capacidad</span>
+                <span className="font-mono">{data.capacity}L</span>
+              </p>
+              {data.temperature != null && (
+                <p className="flex justify-between gap-4">
+                  <span className="text-[#888]">Temperatura</span>
+                  <span className="font-mono text-[#4ADE80]">{data.temperature.toFixed(1)}°C</span>
+                </p>
+              )}
+              {data.gravity != null && (
+                <p className="flex justify-between gap-4">
+                  <span className="text-[#888]">Densidad</span>
+                  <span className="font-mono text-[#FBBF24]">{data.gravity.toFixed(3)}</span>
+                </p>
+              )}
+              {data.abv != null && (
+                <p className="flex justify-between gap-4">
+                  <span className="text-[#888]">ABV est.</span>
+                  <span className="font-mono text-[#C084FC]">{data.abv.toFixed(1)}%</span>
+                </p>
+              )}
+              <p className="flex justify-between gap-4 mt-1 pt-1 border-t border-[#333]">
+                <span className="text-[#888]">Estado</span>
+                <span style={{ color: statusColor }}>{data.status}</span>
+              </p>
+              {data.beerName && (
+                <p className="flex justify-between gap-4">
+                  <span className="text-[#888]">Lote</span>
+                  <span className="text-[#ccc]">{data.beerName}</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </Html>
+      )}
+    </group>
+  )
+}
+
+/* — Industrial concrete hall floor + walls ——————————— */
+function FermentationHall({ tankCount }: { tankCount: number }) {
+  const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(tankCount))))
+  const rows = Math.ceil(tankCount / cols)
+  const W = cols * 3.2 + 4
+  const D = rows * 4.5 + 4
+
+  return (
+    <group>
+      {/* Epoxy-sealed concrete floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[W + 2, D + 2]} />
+        <meshStandardMaterial color="#2A2A27" roughness={0.88} metalness={0.06} />
+      </mesh>
+
+      {/* Floor drain channel */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
+        <planeGeometry args={[W - 1, 0.22]} />
+        <meshStandardMaterial color="#1E1E1C" roughness={0.95} />
+      </mesh>
+
+      {/* Walls */}
+      <mesh position={[0, 3.8, -(D / 2 + 1)]} receiveShadow>
+        <boxGeometry args={[W + 2, 7.6, 0.28]} />
+        <meshStandardMaterial color="#3A3835" roughness={0.9} metalness={0.05} />
+      </mesh>
+      <mesh position={[-(W / 2 + 1), 3.8, 0]} receiveShadow>
+        <boxGeometry args={[0.28, 7.6, D + 2]} />
+        <meshStandardMaterial color="#3A3835" roughness={0.9} metalness={0.05} />
+      </mesh>
+      <mesh position={[W / 2 + 1, 3.8, 0]} receiveShadow>
+        <boxGeometry args={[0.28, 7.6, D + 2]} />
+        <meshStandardMaterial color="#3A3835" roughness={0.9} metalness={0.05} />
+      </mesh>
+
+      {/* Ceiling beams */}
+      {Array.from({ length: Math.ceil(D / 3) + 1 }, (_, i) => (
+        <mesh key={i} position={[0, 7.5, -D / 2 + i * 3]} castShadow>
+          <boxGeometry args={[W + 2, 0.2, 0.25]} />
+          <meshStandardMaterial color="#2E2C28" roughness={0.85} metalness={0.1} />
+        </mesh>
+      ))}
+
+      {/* Floor tank circles */}
+      {Array.from({ length: tankCount }, (_, i) => {
+        const col = i % cols
+        const row = Math.floor(i / cols)
+        const x = (col - (cols - 1) / 2) * 3.2
+        const z = (row - (rows - 1) / 2) * 4.5
+        return (
+          <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.006, z]}>
+            <ringGeometry args={[0.88, 1.0, 32]} />
+            <meshBasicMaterial color="#B87333" transparent opacity={0.2} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
+/* — Industrial pipe header running along ceiling ——————— */
+function PipeSystem({ positions }: { positions: [number, number, number][] }) {
+  if (positions.length === 0) return null
+  const xs = positions.map(p => p[0])
+  const minX = Math.min(...xs); const maxX = Math.max(...xs)
+  const zs  = positions.map(p => p[2])
+  const minZ = Math.min(...zs); const maxZ = Math.max(...zs)
+  const midX = (minX + maxX) / 2
+  const midZ = (minZ + maxZ) / 2
+  const spanX = maxX - minX + 2
+  const spanZ = maxZ - minZ + 2
+
+  return (
+    <group>
+      {/* Main header X */}
+      <mesh position={[midX, 6.1, midZ]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <cylinderGeometry args={[0.055, 0.055, spanX, 8]} />
+        <meshStandardMaterial color="#999" metalness={0.88} roughness={0.15} />
+      </mesh>
+      {/* Main header Z */}
+      <mesh position={[midX, 6.0, midZ]} castShadow>
+        <cylinderGeometry args={[0.04, 0.04, spanZ, 8]} />
+        <meshStandardMaterial color="#999" metalness={0.88} roughness={0.15} />
+      </mesh>
+      {/* Drops to each tank */}
+      {positions.map((pos, i) => (
+        <mesh key={i} position={[pos[0], 3.5, pos[2]]} castShadow>
+          <cylinderGeometry args={[0.025, 0.025, 5.5, 6]} />
+          <meshStandardMaterial color="#AAA" metalness={0.85} roughness={0.18} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/* — Industrial overhead lights ——————————————————————— */
+function OverheadLights({ positions }: { positions: [number, number, number][] }) {
+  return (
+    <>
+      {positions.map((pos, i) => (
+        <group key={i} position={[pos[0], 7.0, pos[2]]}>
+          <mesh>
+            <boxGeometry args={[0.5, 0.1, 0.18]} />
+            <meshStandardMaterial color="#E8E8E0" emissive="#FFEECC" emissiveIntensity={0.6} />
+          </mesh>
+          <pointLight intensity={1.2} color="#FFEECC" distance={9} decay={2} castShadow />
+        </group>
+      ))}
+    </>
+  )
+}
+
+/* — Full 3D room canvas ——————————————————————————————— */
+interface FermentationRoom3DProps {
+  tanks: FermentTank3DData[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+}
+
+function FermentationRoom3DScene({ tanks, selectedId, onSelect }: FermentationRoom3DProps) {
+  const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(tanks.length))))
+
+  // Compute grid positions
+  const positions: [number, number, number][] = tanks.map((_, i) => {
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    return [(col - (cols - 1) / 2) * 3.2, 0, (row - Math.ceil(tanks.length / cols / 2)) * 4.5]
+  })
+
+  const lightPositions: [number, number, number][] = positions.filter((_, i) => i % 2 === 0)
+
+  return (
+    <>
+      <fog attach="fog" args={['#1A1816', 18, 45]} />
+      <color attach="background" args={['#1A1816']} />
+
+      {/* Ambient + sky */}
+      <hemisphereLight args={['#445566', '#221A14', 0.5]} />
+      <ambientLight intensity={0.3} color="#FFDDCC" />
+
+      <FermentationHall tankCount={tanks.length} />
+      <PipeSystem positions={positions} />
+      <OverheadLights positions={lightPositions} />
+
+      {/* Tanks */}
+      {tanks.map((tank, i) => (
+        <FermentTank3D
+          key={tank.id}
+          data={tank}
+          position={positions[i]!}
+          onClick={() => onSelect(tank.id)}
+          selected={tank.id === selectedId}
+        />
+      ))}
+
+      {/* Ambient room label */}
+      <Html position={[0, 6.6, -(Math.ceil(Math.sqrt(tanks.length)) * 2.5)]} center distanceFactor={14} transform>
+        <div className="bg-[#0F0F0F]/80 border border-[#4ADE80]/30 rounded px-3 py-1 text-[11px] whitespace-nowrap pointer-events-none">
+          <span className="text-[#4ADE80]">SALA FERMENTACIÓN</span>
+          <span className="text-[#555] mx-2">|</span>
+          <span className="text-[#60A5FA] font-mono">{tanks.filter(t => t.status === 'active').length} activos</span>
+          <span className="text-[#555] mx-2">|</span>
+          <span className="text-[#ccc] font-mono">{tanks.length} fermentadores</span>
+        </div>
+      </Html>
+
+      <OrbitControls
+        target={[0, 1.5, 0]}
+        minDistance={4}
+        maxDistance={32}
+        maxPolarAngle={Math.PI / 2.1}
+      />
+    </>
+  )
+}
+
+export function FermentationRoom3D({ tanks, selectedId, onSelect }: FermentationRoom3DProps) {
+  return (
+    <div className="w-full rounded-xl overflow-hidden border border-white/10" style={{ height: 420, position: 'relative' }}>
+      <Canvas
+        shadows
+        camera={{ position: [0, 8, 14], fov: 52 }}
+        gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
+      >
+        <FermentationRoom3DScene tanks={tanks} selectedId={selectedId} onSelect={onSelect} />
+      </Canvas>
+      {/* Overlay hint */}
+      <div className="absolute bottom-3 left-3 text-[10px] text-[#666] pointer-events-none select-none">
+        Arrastra · Scroll = zoom · Click en fermentador para detalles
+      </div>
+    </div>
+  )
+}
 
 /* ── Helpers ───────────────────────────────────────────────────── */
 function daysBetween(from: string, to?: string): number {
@@ -221,6 +655,7 @@ export default function FermentationPage() {
   const { data: sessions = [], isLoading } = useBrewSessions('fermenting')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [viewMode, setViewMode] = useState<'3d' | 'classic'>('3d')
 
   const activeId = selectedId ?? sessions[0]?.id ?? null
   const selectedSession = sessions.find((s: BrewSession) => s.id === activeId)
@@ -258,6 +693,27 @@ export default function FermentationPage() {
     }))
 
   const allTwins = [...twinsData, ...emptySlots]
+
+  // Build 3D data from twins
+  const tanks3D = allTwins.map((twin, i) => {
+    const session = i < sessions.length ? sessions[i] : null
+    const gravity = twin.currentGravity
+    const og = twin.originalGravity
+    const abv = og && gravity ? (og - gravity) * 131.25 : null
+    return {
+      id: session?.id ?? `empty-${i}`,
+      name: twin.fermenter.name.replace(/\s+\d+L.*/, '').substring(0, 16),
+      capacity: twin.fermenter.capacity_liters,
+      type: twin.fermenter.type,
+      status: twin.status,
+      fill: twin.status === 'idle' ? 0 : twin.status === 'healthy' ? 0.92 : 0.87,
+      temperature: twin.temperature ?? null,
+      gravity: gravity ?? null,
+      abv,
+      beerName: twin.beerName ?? null,
+    }
+  })
+
   const selectedFermenter = selectedId
     ? FERMENTER_CATALOG[sessions.findIndex((s: BrewSession) => s.id === selectedId) % FERMENTER_CATALOG.length] ?? null
     : sessions.length > 0
@@ -276,14 +732,35 @@ export default function FermentationPage() {
               : 'Monitor digital de fermentación'}
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setShowAddModal(true)}
-          className="bg-accent-amber/10 text-accent-amber border border-accent-amber/20 hover:bg-accent-amber/20"
-        >
-          <Plus size={14} className="mr-1.5" />
-          Añadir manual
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-bg-elevated border border-white/10 rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => setViewMode('3d')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                viewMode === '3d' ? 'bg-accent-amber/20 text-accent-amber' : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              <Box size={12} /> 3D
+            </button>
+            <button
+              onClick={() => setViewMode('classic')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                viewMode === 'classic' ? 'bg-accent-amber/20 text-accent-amber' : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              <Grid3X3 size={12} /> Tarjetas
+            </button>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setShowAddModal(true)}
+            className="bg-accent-amber/10 text-accent-amber border border-accent-amber/20 hover:bg-accent-amber/20"
+          >
+            <Plus size={14} className="mr-1.5" />
+            Añadir manual
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -292,9 +769,55 @@ export default function FermentationPage() {
             <div key={i} className="glass-card rounded-xl h-48 animate-pulse bg-bg-elevated" />
           ))}
         </div>
-      ) : sessions.length === 0 ? (
+      ) : sessions.length === 0 && viewMode === 'classic' ? (
         <EmptyState />
+      ) : viewMode === '3d' ? (
+        /* ── 3D Room View ── */
+        <div className="space-y-4">
+          {sessions.length === 0 ? (
+            <div className="glass-card rounded-xl border border-white/10 p-4">
+              <FermentationRoom3D
+                tanks={tanks3D}
+                selectedId={activeId}
+                onSelect={(id) => {
+                  const idx = tanks3D.findIndex(t => t.id === id)
+                  if (idx >= 0 && idx < sessions.length && sessions[idx]) {
+                    setSelectedId(sessions[idx]!.id)
+                  }
+                }}
+              />
+              <p className="text-text-muted text-sm text-center mt-4">
+                No hay lotes activos. Inicia uno desde Elaboración.
+              </p>
+            </div>
+          ) : (
+            <FermentationRoom3D
+              tanks={tanks3D}
+              selectedId={activeId}
+              onSelect={(id) => {
+                const idx = tanks3D.findIndex(t => t.id === id)
+                if (idx >= 0 && idx < sessions.length && sessions[idx]) {
+                  setSelectedId(sessions[idx]!.id)
+                }
+              }}
+            />
+          )}
+
+          {/* Detail panel below 3D */}
+          <AnimatePresence>
+            {selectedSession && selectedFermenter && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+              >
+                <DetailPanel session={selectedSession} fermenter={selectedFermenter} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       ) : (
+        /* ── Classic Card View ── */
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6">
           {/* Left: Fermenter grid */}
           <div className="space-y-3">
