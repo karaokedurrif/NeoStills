@@ -1,6 +1,6 @@
 // frontend/src/pages/keezer.tsx — NeoStills Barrel Tracker (Aging Room)
 // Inspirado en hub.bodegadata.com/barrels y /cellar — adaptado al dominio de destilación
-import { useState, useCallback, useMemo, Suspense, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Archive, Plus, Search, Droplets,
@@ -9,7 +9,7 @@ import {
   BarChart3, AlertCircle, RefreshCw,
 } from 'lucide-react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Text, RoundedBox } from '@react-three/drei'
+import { OrbitControls, Html, RoundedBox } from '@react-three/drei'
 import type { Mesh } from 'three'
 import { useUIStore } from '@/stores/ui-store'
 import { api } from '@/lib/api'
@@ -875,30 +875,41 @@ function Barrel3D({
         <meshStandardMaterial color="#222" roughness={0.9} />
       </mesh>
 
-      {/* Etiqueta de código */}
-      <Text
-        position={[0, barrelH + 0.35, 0]}
-        fontSize={0.18}
-        color={isSelected ? '#F0EBE1' : '#A39B8B'}
-        anchorX="center"
-        anchorY="middle"
-        maxWidth={1}
+      {/* Etiqueta flotante HTML (sin carga de fuente) */}
+      <Html
+        position={[0, barrelH + 0.55, 0]}
+        center
+        distanceFactor={6}
+        zIndexRange={[10, 0]}
       >
-        {vessel.code}
-      </Text>
-
-      {/* ABV si disponible */}
-      {vessel.current_abv != null && (
-        <Text
-          position={[0, barrelH + 0.12, 0]}
-          fontSize={0.13}
-          color={isSelected ? '#C7A951' : '#6B7A8D'}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {vessel.current_abv.toFixed(1)}%
-        </Text>
-      )}
+        <div style={{
+          pointerEvents: 'none',
+          textAlign: 'center',
+          userSelect: 'none',
+          lineHeight: 1.2,
+        }}>
+          <div style={{
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: isSelected ? '#F0EBE1' : '#C7A951',
+            whiteSpace: 'nowrap',
+            textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+          }}>
+            {vessel.code}
+          </div>
+          {vessel.current_abv != null && (
+            <div style={{
+              fontFamily: 'monospace',
+              fontSize: '9px',
+              color: isSelected ? '#C7A951' : '#8B9BB4',
+              textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+            }}>
+              {vessel.current_abv.toFixed(1)}%
+            </div>
+          )}
+        </div>
+      </Html>
     </group>
   )
 }
@@ -939,8 +950,7 @@ function BarrelRoom3D({
         <meshStandardMaterial color="#1A1410" roughness={0.95} />
       </mesh>
 
-      <Suspense fallback={null}>
-        {vessels.map((v, i) => {
+      {vessels.map((v, i) => {
           const col = i % COLS
           const row = Math.floor(i / COLS)
           const xOffset = ((vessels.length > COLS ? COLS : vessels.length) - 1) * GAP_X / 2
@@ -959,8 +969,7 @@ function BarrelRoom3D({
               onClick={() => onSelect(v)}
             />
           )
-        })}
-      </Suspense>
+})}
 
       <OrbitControls
         enablePan={true}
@@ -1191,11 +1200,11 @@ export default function KeezerPage() {
           ) : filtered.length === 0 ? (
             <EmptyState onAdd={openCreate} hasFilter={search !== '' || statusFilter !== 'all'} />
           ) : viewMode === '3d' ? (
-            <div className="h-[600px] rounded-2xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+            <div className="relative rounded-2xl border" style={{ height: '600px', borderColor: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
               {/* Instrucciones de control */}
-              <div className="absolute z-10 mt-2 ml-2 pointer-events-none">
-                <span className="text-[10px] px-2 py-1 rounded-lg" style={{ background: 'rgba(0,0,0,0.6)', color: '#6B7A8D' }}>
-                  Arrastra para rotar · Scroll para zoom · Click en barrica para seleccionar
+              <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                <span className="text-[10px] px-2 py-1 rounded-lg" style={{ background: 'rgba(0,0,0,0.7)', color: '#6B7A8D' }}>
+                  Arrastra para rotar · Scroll para zoom · Click para seleccionar
                 </span>
               </div>
               <BarrelRoom3D
