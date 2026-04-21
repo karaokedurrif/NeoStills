@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="frame" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18203A"/>
+      <stop offset="1" stop-color="#0D1221"/>
+    </linearGradient>
+    <linearGradient id="copper" x1="20" y1="12" x2="44" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E5C4A4"/>
+      <stop offset="0.38" stop-color="#D1A178"/>
+      <stop offset="0.66" stop-color="#B87333"/>
+      <stop offset="1" stop-color="#6E431F"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#frame)"/>
+  <rect x="4.75" y="4.75" width="54.5" height="54.5" rx="17.25" stroke="#31476C" stroke-width="1.5"/>
+  <path d="M23.5 50.5C23.5 43.1 27.24 38.9 32 38.9C36.76 38.9 40.5 43.1 40.5 50.5" stroke="url(#copper)" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M26.3 37.8V24.6C26.3 22.9 27.15 21.33 28.58 20.41L30.95 18.88C31.59 18.47 32.41 18.47 33.05 18.88L35.42 20.41C36.85 21.33 37.7 22.9 37.7 24.6V37.8" stroke="url(#copper)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 18.3V13.8C32 10.95 34.31 8.64 37.16 8.64H42.7C45.7 8.64 48.14 11.08 48.14 14.08V24.7C48.14 27.41 45.95 29.6 43.24 29.6H41.1" stroke="url(#copper)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M41.2 29.6L38.2 32.85" stroke="url(#copper)" stroke-width="2.8" stroke-linecap="round"/>
+</svg>
