@@ -69,6 +69,7 @@ export const useAuthStore = create<AuthState>()(
           onboardingStatus: null,
           onboardingLoaded: false,
         })
+        window.location.href = '/login'
       },
     }),
     {

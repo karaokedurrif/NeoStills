@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  type LucideIcon,
   Check, ThermometerSun, FlaskConical, Flame,
   Timer, ChevronRight, Droplets, Package, Beaker
 } from 'lucide-react'
@@ -14,7 +13,7 @@ import type { BrewPhase } from '@/lib/types'
 export interface PhaseConfig {
   key: BrewPhase
   label: string
-  icon: LucideIcon
+  icon: React.ElementType
   color: string
   bgColor: string
   defaultMinutes: number

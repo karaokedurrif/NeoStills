@@ -1,0 +1,15 @@
+<svg viewBox="0 0 320 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sparkFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Area fill -->
+  <path d="M0 48 L38 40 L76 44 L114 32 L152 36 L190 24 L228 28 L266 16 L304 20 L320 18 L320 60 L0 60 Z" fill="url(#sparkFill)"/>
+  <!-- Line -->
+  <path d="M0 48 L38 40 L76 44 L114 32 L152 36 L190 24 L228 28 L266 16 L304 20 L320 18" stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Dot at end -->
+  <circle cx="320" cy="18" r="4" fill="#22d3ee"/>
+  <circle cx="320" cy="18" r="8" fill="#22d3ee" fill-opacity="0.2"/>
+</svg>

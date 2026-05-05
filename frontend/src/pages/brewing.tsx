@@ -980,7 +980,7 @@ export default function BrewingPage() {
   )
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="neo-page-bg min-h-screen p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>

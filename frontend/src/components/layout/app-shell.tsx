@@ -64,9 +64,13 @@ export function AppShell({ children }: AppShellProps) {
   const closeNotif = useCallback(() => setNotifOpen(false), [])
 
   const ambientClass = ambientClasses[brewPhase] ?? 'ambient-idle'
+  const sidebarCollapsed = useUIStore(s => s.sidebarCollapsed)
 
   return (
-    <div className={cn('system-shell flex h-dvh overflow-hidden bg-bg-primary', ambientClass)}>
+    <div
+      className={cn('neo-app-shell system-shell h-dvh overflow-hidden bg-bg-primary', ambientClass)}
+      style={{ ['--neo-sidebar-w' as string]: sidebarCollapsed ? '64px' : '232px' }}
+    >
       {/* Skip to main content link for accessibility */}
       <a
         href="#main-content"
@@ -89,7 +93,7 @@ export function AppShell({ children }: AppShellProps) {
       <Sidebar />
 
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-w-0 relative z-10">
+      <main className="neo-main flex flex-col min-w-0 relative z-10 overflow-hidden">
         <InstallPrompt />
         <OfflineBanner />
         <Header
@@ -97,7 +101,7 @@ export function AppShell({ children }: AppShellProps) {
           onOpenNotifications={openNotif}
         />
 
-        <main id="main-content" className="flex-1 overflow-y-auto pb-20 md:pb-0" role="main">
+        <div id="main-content" className="flex-1 overflow-y-auto pb-20 md:pb-0" role="main">
           <motion.div
             key={currentPath}
             {...pageTransition}
@@ -105,8 +109,8 @@ export function AppShell({ children }: AppShellProps) {
           >
             {children}
           </motion.div>
-        </main>
-      </div>
+        </div>
+      </main>
 
       {/* AI Agent — full-screen overlay */}
       <AnimatePresence>

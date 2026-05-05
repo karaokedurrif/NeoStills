@@ -3,6 +3,18 @@ import type { TokenResponse, ApiError } from './types'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payloadInfo = token.split('.')[1]
+    if (!payloadInfo) return true
+    const decoded = JSON.parse(atob(payloadInfo))
+    if (!decoded.exp) return false
+    return (decoded.exp * 1000) - Date.now() < 5000 // 5 seconds earlier
+  } catch {
+    return true
+  }
+}
+
 class ApiClient {
   private accessToken: string | null = null
   private refreshPromise: Promise<boolean> | null = null
@@ -31,6 +43,18 @@ class ApiClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
+
+    // Check expiration BEFORE making the request to prevent 401 console errors
+    if (this.accessToken && path !== '/v1/auth/refresh') {
+      if (isTokenExpired(this.accessToken)) {
+        const refreshed = await this.tryRefresh()
+        if (!refreshed) {
+           // Skip adding Authorization header so it fails gracefully or redirects
+           this.accessToken = null
+        }
+      }
+    }
+
     if (this.accessToken) headers['Authorization'] = `Bearer ${this.accessToken}`
 
     const response = await fetch(url.toString(), {

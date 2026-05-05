@@ -1322,7 +1322,7 @@ export default function KeezerPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="neo-page-bg min-h-screen flex flex-col gap-4 h-full p-4 md:p-6">
       {/* Cabecera */}
       <div className="flex items-center justify-between">
         <div>

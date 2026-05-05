@@ -126,7 +126,7 @@ services:
     container_name: neostills
     restart: always
     ports:
-      - "8006:80"   # Cloudflare tunnel via proxy network; host port for direct debug access
+      - "8081:80"   # NeoStills frontend (8080 reserved for beergate.es)
     depends_on:
       - backend
     networks:

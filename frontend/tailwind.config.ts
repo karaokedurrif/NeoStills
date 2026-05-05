@@ -7,16 +7,48 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        neo: {
+          bg: {
+            950: 'var(--neo-bg-950)',
+            900: 'var(--neo-bg-900)',
+            850: 'var(--neo-bg-850)',
+            800: 'var(--neo-bg-800)',
+          },
+          text: {
+            DEFAULT: 'var(--neo-text)',
+            muted: 'var(--neo-text-muted)',
+            soft: 'var(--neo-text-soft)',
+          },
+          card: {
+            DEFAULT: 'var(--neo-card)',
+            strong: 'var(--neo-card-strong)',
+          },
+          border: {
+            DEFAULT: 'var(--neo-border)',
+            strong: 'var(--neo-border-strong)',
+          },
+          copper: {
+            DEFAULT: 'var(--neo-copper)',
+            light: 'var(--neo-copper-light)',
+            dark: 'var(--neo-copper-dark)',
+          },
+          gold: 'var(--neo-gold)',
+          cyan: 'var(--neo-cyan)',
+          blue: 'var(--neo-blue)',
+          green: 'var(--neo-green)',
+          red: 'var(--neo-red)',
+          amber: 'var(--neo-amber)',
+        },
         bg: {
-          deep: '#0E1222',
-          primary: '#12172A',
-          secondary: '#1A1A2E',
-          tertiary: '#232846',
-          hover: '#2B3156',
-          card: '#161B31',
-          elevated: '#202644',
-          surface: '#1B203A',
-          glass: 'rgba(255,255,255,0.04)',
+          deep: 'var(--bg-deep)',
+          primary: 'var(--bg-primary)',
+          secondary: 'var(--bg-secondary)',
+          tertiary: 'var(--bg-tertiary)',
+          hover: 'var(--bg-hover)',
+          card: 'var(--bg-card)',
+          elevated: 'var(--bg-elevated)',
+          surface: 'var(--bg-surface)',
+          glass: 'var(--bg-glass)',
         },
         accent: {
           DEFAULT: '#B87333',

@@ -108,24 +108,22 @@ export function Sidebar() {
     const content = (
       <div
         className={cn(
-          'sidebar-item group',
-          active && 'active',
+          'neo-sidebar__item',
+          active && 'neo-sidebar__item--active',
           sidebarCollapsed && 'justify-center px-0',
         )}
         title={sidebarCollapsed ? t(labelKey) : undefined}
         aria-current={active ? 'page' : undefined}
         onClick={() => handleClick(to)}
       >
-        <span className="sidebar-icon-wrap" style={{ ['--icon-accent' as any]: accent }}>
-          <Icon size={18} className="shrink-0 sidebar-icon" />
-        </span>
+        <Icon size={18} className="shrink-0 neo-sidebar__icon" />
         <AnimatePresence>
           {!sidebarCollapsed && (
             <motion.span
               initial={{ opacity: 0, width: 0 }}
               animate={{ opacity: 1, width: 'auto' }}
               exit={{ opacity: 0, width: 0 }}
-              className="text-[13px] font-medium overflow-hidden whitespace-nowrap"
+              className="neo-sidebar__label overflow-hidden whitespace-nowrap"
             >
               {t(labelKey)}
             </motion.span>
@@ -146,21 +144,14 @@ export function Sidebar() {
   }
 
   return (
-    <motion.aside
-      animate={{ width: sidebarCollapsed ? 60 : 240 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="hidden md:flex flex-col h-full border-r border-accent-cobalt/16 overflow-hidden shrink-0"
-      style={{
-        backgroundImage: "linear-gradient(180deg, rgba(14,18,34,0.98) 0%, rgba(8,11,20,0.98) 100%), url('/still-schematic-v1.svg')",
-        backgroundRepeat: 'no-repeat, no-repeat',
-        backgroundPosition: '0 0, right -240px bottom -120px',
-        backgroundSize: 'auto, 620px',
-      }}
+    <aside
+      className="neo-sidebar hidden md:flex flex-col h-full overflow-hidden"
+      data-collapsed={sidebarCollapsed ? 'true' : 'false'}
       role="navigation"
       aria-label={t('nav.main_navigation', 'Main navigation')}
     >
       {/* Logo */}
-      <div className="flex items-center h-16 px-4 border-b border-accent-cobalt/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(255,255,255,0)_100%)]">
+      <div className="neo-sidebar__logo flex items-center" style={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
         <AnimatePresence mode="wait">
           {!sidebarCollapsed ? (
             <motion.div
@@ -170,11 +161,27 @@ export function Sidebar() {
               exit={{ opacity: 0 }}
               className="overflow-hidden"
             >
-              <Logo size="md" showTagline className="overflow-hidden" />
+              <img
+                src="/assets/neostills/logo-neostills.svg"
+                alt="NeoStills"
+                style={{ width: 168, height: 'auto', display: 'block', filter: 'drop-shadow(0 4px 14px rgba(184,115,51,0.30))' }}
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement
+                  if (img.src.endsWith('.svg')) img.src = '/assets/neostills/logo-neostills.png'
+                }}
+              />
             </motion.div>
           ) : (
             <motion.div key="icon" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mx-auto">
-              <Logo size="sm" showText={false} />
+              <img
+                src="/assets/neostills/logo-neostills-mark.png"
+                alt="NS"
+                className="h-9 w-9 object-contain"
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement
+                  if (!img.src.endsWith('.svg')) img.src = '/assets/neostills/logo-neostills-mark.svg'
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -185,10 +192,10 @@ export function Sidebar() {
         {navGroups.map((group, gi) => (
           <div key={gi}>
             {group.labelKey && !sidebarCollapsed && (
-              <div className="nav-section-label" style={{ ['--section-accent' as any]: toneAccent[group.tone] }}>{t(group.labelKey)}</div>
+              <div className="neo-sidebar__section-title">{t(group.labelKey)}</div>
             )}
             {group.labelKey && sidebarCollapsed && (
-              <div className="h-px bg-white/[0.04] mx-2 my-3" />
+              <div className="h-px bg-white/[0.06] mx-2 my-3" />
             )}
             <div className="space-y-0.5">
               {group.items.map((item) => renderItem(item, toneAccent[group.tone]))}
@@ -253,16 +260,13 @@ export function Sidebar() {
         <div className="px-2 pb-2">
           <button
             onClick={toggleSidebar}
-            className="sidebar-item w-full justify-center"
-            style={{ ['--icon-accent' as any]: toneAccent.steel }}
+            className="neo-sidebar__item w-full justify-center opacity-60 hover:opacity-100"
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <span className="sidebar-icon-wrap">
               {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </span>
           </button>
         </div>
       </div>
-    </motion.aside>
+    </aside>
   )
 }
